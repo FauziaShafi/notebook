@@ -1,14 +1,15 @@
- require("dotenv").config();
+//require("dotenv").config();
 const express = require("express");
 const User = require("../models/User");
 const router = express.Router();
 const { body, validationResult } = require("express-validator");
 const bcrypt = require("bcryptjs");
 var jwt = require("jsonwebtoken");
+const fetchuser = require("../Middleware/fetchuser");
+const jwt_secret = "secretkey";
+// const jwt_secret = process.env.SECRET_KEY;
 
-const jwt_secret = process.env.SECRET_KEY;
-
-// Create a user "/api/auth/createuser"
+// Route: Create a user "/api/auth/createuser"
 router.post(
   "/createuser",
   [
@@ -61,51 +62,70 @@ router.post(
   }
 );
 
-// Login a user  POST:/api/auth/login
+// Route: Login a user  POST:/api/auth/login
 
-router.post('/login',[
-
-  body("email", "Enter a valid email").isEmail(),
-  body("password", "Password cannot be blank").exists(),
- 
-], async(req,res)=>{
-   // Finds the validation errors in this request and wraps them in an object with handy functions
-   const errors = validationResult(req);
-   if (!errors.isEmpty()) {
-     return res.status(400).json({ errors: errors.array() });
-   }
-
-   const {email,password} = req.body;
-   try {
-    let user = await User.findOne({ email: email });
-
-    if (!user) {
-      return res.status(400).json({ error: "Please 1 try to login with correct credentials" });
-    }
-    
-    const checkPassword = bcrypt.compare(password,user.password);
-
-    if(!checkPassword) {
-      return res.status(400).json({ error: "Please try to login with correct credentials" });
+router.post(
+  "/login",
+  [
+    body("email", "Enter a valid email").isEmail(),
+    body("password", "Password cannot be blank").exists(),
+  ],
+  async (req, res) => {
+    // Finds the validation errors in this request and wraps them in an object with handy functions
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
     }
 
-    // If both credentals are correct then send the payload data
-    const data = {
-      user: {
-        id: user.id,
-      },
-    };
+    const { email, password } = req.body;
+    try {
+      let user = await User.findOne({ email: email });
 
-    const token = jwt.sign(data, jwt_secret);
-    res.json({token})
-    
-   } catch (error) {
-    console.error(error.message);
+      if (!user) {
+        return res
+          .status(400)
+          .json({ error: "Please 1 try to login with correct credentials" });
+      }
+
+      const checkPassword = bcrypt.compare(password, user.password);
+
+      if (!checkPassword) {
+        return res
+          .status(400)
+          .json({ error: "Please try to login with correct credentials" });
+      }
+
+      // If both credentals are correct then send the payload data
+      const data = {
+        user: {
+          id: user.id,
+        },
+      };
+
+      const token = jwt.sign(data, jwt_secret);
+      res.json({ token });
+    } catch (error) {
+      console.error(error.message);
       res.status(500).send("Error Occured");
-   }
+    }
+  }
+);
 
-})
+// Route : Get user data   api/auth/getuser
 
-
+router.get("/getuser", fetchuser, async (req, res) => {
+  
+  try {
+    // get the userid
+    const userId = req.user.id;
+    // find the user
+    const user = await User.findById(userId).select("-password");
+    // send the userdata
+    res.send(user);
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).send("Internal Server Error");
+  }
+});
 
 module.exports = router;
